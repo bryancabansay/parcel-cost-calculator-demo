@@ -17,6 +17,7 @@ import mynt.parcel.calculator.error.exception.NoCostExpressionException;
 import mynt.parcel.calculator.error.exception.ParcelRuleNotFoundException;
 import mynt.parcel.calculator.model.ParcelRule;
 import mynt.parcel.calculator.repository.ParcelRuleRepository;
+import mynt.parcel.calculator.util.DiscountUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -52,6 +53,11 @@ public class ParcelRuleService {
    * Voucher service for checking available discounts.
    */
   private final VoucherService voucherService;
+
+  /**
+   * Discount util class.
+   */
+  private final DiscountUtil discountUtil;
 
   /**
    * Replace old rules with new ones.
@@ -144,7 +150,7 @@ public class ParcelRuleService {
       try {
         // The discount is a percentage, divide it by 100
         var voucher = voucherService.getVoucherByCode(voucherCode);
-        finalCost = cost * (100 - voucher.getDiscount() / 100);
+        finalCost = discountUtil.getDiscountedPrice(cost, voucher.getDiscount());
       } catch (final ApiException e) {
         // If the API failed just log the error and proceed with returning the cost
         if (log.isErrorEnabled()) {
