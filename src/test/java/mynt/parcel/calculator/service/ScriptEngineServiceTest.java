@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 
 public class ScriptEngineServiceTest {
   @Test
-  public void shouldReturnCorrectEngine() {
+  private void shouldReturnCorrectEngine() {
     // setup
     var engineService = new ScriptEngineService();
 

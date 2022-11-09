@@ -27,8 +27,10 @@ public class GlobalExceptionHandler {
   @ExceptionHandler({ParcelRuleNotFoundException.class, NoCostExpressionException.class})
   public ResponseEntity<ParcelCostResponse> handleParcelRuleExceptions(final RuntimeException ex,
       final WebRequest request) {
-    log.error(ex.getMessage());
-    log.error("Parameters: {}", request.getParameterMap());
+    if (log.isErrorEnabled()) {
+      log.error(ex.getMessage());
+      log.error("Parameters: {}", request.getParameterMap());
+    }
     return new ResponseEntity<>(ParcelCostResponse.builder().cost(-1).build(), HttpStatus.OK);
   }
 }

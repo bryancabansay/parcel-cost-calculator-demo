@@ -1,5 +1,8 @@
 package mynt.parcel.calculator.service;
 
+import io.swagger.client.ApiException;
+import io.swagger.client.model.VoucherItem;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import javax.script.ScriptException;
@@ -19,8 +22,13 @@ import org.springframework.test.context.junit4.SpringRunner;
 @RunWith(SpringRunner.class)
 public class ParcelRuleServiceTest {
 
+  public static final DecimalFormat format = new DecimalFormat("0.00");
+
   @Mock
   private ParcelRuleRepository repository;
+
+  @Mock
+  private VoucherService voucherService;
 
   @Before
   public void setup() {
@@ -43,9 +51,9 @@ public class ParcelRuleServiceTest {
   @Test(expected = NoCostExpressionException.class)
   public void shouldThrowExceptionIfRejectParcel() throws ScriptException {
     // setup
-    var service = new ParcelRuleService(repository, new ScriptEngineService());
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
     service.populateRules();
-    var rejectReq = new ParcelCostRequest(51, 2500, 1, 1);
+    var rejectReq = new ParcelCostRequest(51, 2500, 1, 1, null);
 
     // exercise
     // verify
@@ -58,23 +66,32 @@ public class ParcelRuleServiceTest {
     var rejectRule = new ParcelRule(1, 1, "Reject", "weight > 50", null);
     Mockito.when(repository.findAllByOrderByPriority())
         .thenReturn(Collections.singletonList(rejectRule));
-    var service = new ParcelRuleService(repository, new ScriptEngineService());
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
     service.populateRules();
 
     //exercise
     // verify
-    service.getCostResponse(new ParcelCostRequest(5, 1, 1, 1));
+    service.getCostResponse(new ParcelCostRequest(5, 1, 1, 1, null));
+  }
+
+  private Double getFormattedDouble(double val) {
+    return Double.parseDouble(format.format(val));
   }
 
   @Test
-  public void shouldReturnCorrectParcelCostResponse() throws ScriptException {
+  public void shouldReturnCorrectParcelCostResponse() throws ScriptException, ApiException {
     // setup
-    var service = new ParcelRuleService(repository, new ScriptEngineService());
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
     service.populateRules();
-    var heavyReq = new ParcelCostRequest(50, 2500, 1, 1);
-    var smallReq = new ParcelCostRequest(10, 1499, 1, 1);
-    var mediumReq = new ParcelCostRequest(10, 2499, 1, 1);
-    var largeReq = new ParcelCostRequest(10, 2500, 1, 1);
+    var code = "test-code";
+    var heavyReq = new ParcelCostRequest(50, 2500, 1, 1, null);
+    var smallReq = new ParcelCostRequest(10, 1499, 1, 1, null);
+    var mediumReq = new ParcelCostRequest(10, 2499, 1, 1, null);
+    var largeReq = new ParcelCostRequest(10, 2500, 1, 1, code);
+    var discount = 25.0f;
+    var voucherItem = new VoucherItem();
+    voucherItem.setDiscount(discount);
+    Mockito.when(voucherService.getVoucherByCode(code)).thenReturn(voucherItem);
 
     // exercise
     var heavyRes = service.getCostResponse(heavyReq);
@@ -84,12 +101,74 @@ public class ParcelRuleServiceTest {
 
     // verify
     Assertions.assertEquals("Heavy Parcel", heavyRes.getRuleName());
-    Assertions.assertEquals(20 * 50, heavyRes.getCost());
+    Assertions.assertEquals(getFormattedDouble(20 * 50), heavyRes.getCost());
     Assertions.assertEquals("Small Parcel", smallRes.getRuleName());
-    Assertions.assertEquals(0.03 * 1499, smallRes.getCost());
+    Assertions.assertEquals(getFormattedDouble(0.03 * 1499), smallRes.getCost());
     Assertions.assertEquals("Medium Parcel", mediumRes.getRuleName());
-    Assertions.assertEquals(0.04 * 2499, mediumRes.getCost());
+    Assertions.assertEquals(getFormattedDouble(0.04 * 2499), mediumRes.getCost());
     Assertions.assertEquals("Large Parcel", largeRes.getRuleName());
-    Assertions.assertEquals(0.05 * 2500, largeRes.getCost());
+    Assertions.assertEquals(getFormattedDouble(0.05 * 2500 * (100 - discount / 100)),
+        largeRes.getCost());
+  }
+
+  @Test
+  public void shouldProceedIfNoVoucherCode() {
+    // setup
+    var expected = 1234;
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
+
+    // exercise
+    var actual = service.checkDiscount(expected, null);
+
+    // verify
+    Assertions.assertEquals(expected, actual);
+  }
+
+  @Test
+  public void shouldProceedIfExceptionOccurs() throws ApiException {
+    // setup
+    var expected = 1234;
+    var code = "Code";
+    Mockito.when(voucherService.getVoucherByCode(code)).thenThrow(new ApiException());
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
+
+    // exercise
+    var actual = service.checkDiscount(expected, code);
+
+    // verify
+    Assertions.assertEquals(expected, actual);
+  }
+
+  @Test
+  public void shouldApplyCorrectDiscount() throws ApiException {
+    // setup
+    var expected = 1234;
+    var code = "Code";
+    var voucherItem = new VoucherItem();
+    var discount = 50.0f;
+    voucherItem.setDiscount(discount);
+    Mockito.when(voucherService.getVoucherByCode(code)).thenReturn(voucherItem);
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
+
+    // exercise
+    var actual = service.checkDiscount(expected, code);
+
+    // verify
+    Assertions.assertEquals(expected * (100 - (discount / 100)), actual);
+  }
+
+  @Test
+  public void shouldProceedIfNullPointerExceptionOccurs() throws ApiException {
+    // setup
+    var expected = 1234;
+    var code = "Code";
+    Mockito.when(voucherService.getVoucherByCode(code)).thenReturn(new VoucherItem());
+    var service = new ParcelRuleService(repository, new ScriptEngineService(), voucherService);
+
+    // exercise
+    var actual = service.checkDiscount(expected, code);
+
+    // verify
+    Assertions.assertEquals(expected, actual);
   }
 }

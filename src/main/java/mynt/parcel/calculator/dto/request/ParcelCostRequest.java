@@ -43,6 +43,11 @@ public class ParcelCostRequest {
   private double length;
 
   /**
+   * Voucher code as string.
+   */
+  private String voucherCode;
+
+  /**
    * Get the volume.
    *
    * @return Returns the volume of the parcel.

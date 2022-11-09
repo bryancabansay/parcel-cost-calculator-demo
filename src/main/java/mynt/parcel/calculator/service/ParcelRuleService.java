@@ -1,5 +1,7 @@
 package mynt.parcel.calculator.service;
 
+import io.swagger.client.ApiException;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +10,7 @@ import javax.script.ScriptContext;
 import javax.script.ScriptException;
 import javax.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import mynt.parcel.calculator.dto.request.ParcelCostRequest;
 import mynt.parcel.calculator.dto.response.ParcelCostResponse;
 import mynt.parcel.calculator.error.exception.NoCostExpressionException;
@@ -22,12 +25,18 @@ import org.springframework.util.StringUtils;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ParcelRuleService {
+
+  /**
+   * Decimal format for cost results.
+   */
+  public static final DecimalFormat format = new DecimalFormat("0.00");
 
   /**
    * All rules present in the database.
    */
-  private static final List<ParcelRule> rules = new ArrayList<>();
+  private final List<ParcelRule> rules = new ArrayList<>();
 
   /**
    * Repository class for parcel rules.
@@ -38,6 +47,11 @@ public class ParcelRuleService {
    * Script engine service.
    */
   private final ScriptEngineService scriptEngineService;
+
+  /**
+   * Voucher service for checking available discounts.
+   */
+  private final VoucherService voucherService;
 
   /**
    * Replace old rules with new ones.
@@ -94,11 +108,12 @@ public class ParcelRuleService {
    * @param costExpression Cost expression to be followed.
    * @param weight         Weight in kg.
    * @param volume         Volume in cubic cm.
+   * @param voucher        Voucher code
    * @return Cost of the parcel.
    * @throws ScriptException thrown by the engine.eval function.
    */
   public double getCost(final String costExpression, @Positive final double weight,
-      @Positive double volume)
+      @Positive double volume, final String voucher)
       throws ScriptException {
     if (!StringUtils.hasLength(costExpression)) {
       throw new NoCostExpressionException();
@@ -112,7 +127,37 @@ public class ParcelRuleService {
     bindings.put("weight", weight);
     bindings.put("volume", volume);
 
-    return (Double) engine.eval(costExpression, bindings);
+    return checkDiscount((Double) engine.eval(costExpression, bindings), voucher);
+  }
+
+  /**
+   * Check for voucher discount.
+   *
+   * @param cost        Cost of the parcel.
+   * @param voucherCode Voucher code to be tested in the separate API.
+   * @return The discounted cost if there is any.
+   */
+  public double checkDiscount(final double cost, final String voucherCode) {
+    // If voucher code is present, check for possible discount
+    var finalCost = cost;
+    if (StringUtils.hasLength(voucherCode)) {
+      try {
+        // The discount is a percentage, divide it by 100
+        var voucher = voucherService.getVoucherByCode(voucherCode);
+        finalCost = cost * (100 - voucher.getDiscount() / 100);
+      } catch (final ApiException e) {
+        // If the API failed just log the error and proceed with returning the cost
+        if (log.isErrorEnabled()) {
+          log.error("Voucher API Exception. {} Code: {} Body: {}", e.getMessage(), e.getCode(),
+              e.getResponseBody());
+        }
+      } catch (final NullPointerException ex) {
+        if (log.isErrorEnabled()) {
+          log.error("Null pointer exception for discount.");
+        }
+      }
+    }
+    return Double.parseDouble(format.format(finalCost));
   }
 
   /**
@@ -131,13 +176,13 @@ public class ParcelRuleService {
     // Get the parcel rule applicable based on
     var optional = getParcelRule(weight, volume);
 
-    // Throw an exception if
+    // Throw an exception if not found.
     var rule = optional.orElseThrow(() -> {
       throw new ParcelRuleNotFoundException();
     });
 
     // Get cost
-    var cost = getCost(rule.getCostExpression(), weight, volume);
+    var cost = getCost(rule.getCostExpression(), weight, volume, request.getVoucherCode());
 
     // Populate and return the response
     return ParcelCostResponse.builder().cost(cost).ruleName(rule.getRuleName()).build();
