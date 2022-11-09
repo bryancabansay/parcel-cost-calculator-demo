@@ -12,5 +12,4 @@ spring:
       use-new-id-generator-mappings: false
 
 voucher-service:
-  base-path: http://localhost:3000
   api-key: apikey
