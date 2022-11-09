@@ -10,7 +10,7 @@
 
 1. Clone this repository by running the command below:
     ```shell
-    $ git clone --depth 1 https://github.com/bryancabansay/parcel-cost-calculator-demo.git
+    git clone --depth 1 https://github.com/bryancabansay/parcel-cost-calculator-demo.git
     ```
 
 2. Use the `dump.sql` file in the `db` directory to create and populate the database schema.
