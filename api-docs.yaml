@@ -1,0 +1,61 @@
+openapi: 3.0.1
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8080
+  description: Generated server url
+paths:
+  /api/parcel/delivery-cost:
+    get:
+      tags:
+      - parcel-cost-controller
+      operationId: getParcelCost
+      parameters:
+      - name: request
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/ParcelCostRequest'
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ParcelCostResponse'
+components:
+  schemas:
+    ParcelCostRequest:
+      required:
+      - height
+      - length
+      - weight
+      - width
+      type: object
+      properties:
+        weight:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        width:
+          type: number
+          format: double
+        length:
+          type: number
+          format: double
+        voucherCode:
+          type: string
+        volume:
+          type: number
+          format: double
+    ParcelCostResponse:
+      type: object
+      properties:
+        cost:
+          type: number
+          format: double
+        classification:
+          type: string
