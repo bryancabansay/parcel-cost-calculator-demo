@@ -25,9 +25,7 @@ public class VoucherService {
    * @return {@link VoucherApi} object.
    */
   public VoucherApi getVoucherApi() {
-    var api = new VoucherApi();
-    api.getApiClient().setBasePath(config.getBasePath());
-    return api;
+    return new VoucherApi();
   }
 
   /**

@@ -16,9 +16,4 @@ public class VoucherServiceConfig {
    * API key for the request.
    */
   private String apiKey;
-
-  /**
-   * The base path of the API.
-   */
-  private String basePath;
 }
